@@ -40,10 +40,44 @@ public class FileSystemManager {
     }
 
     public void createFile(String fileName) throws Exception {
-        // TODO
-        throw new UnsupportedOperationException("Method not implemented yet.");
-    }
+        globalLock.lock();
+        try {
+            //  Check for existing file
+            for (FEntry entry : inodeTable) {
+                if (entry != null && entry.getFilename().equals(fileName)) {
+                    throw new Exception("File already exists.");
+                }
+            }
 
+            //  Find free inode slot
+            int inodeIndex = -1;
+            for (int i = 0; i < inodeTable.length; i++) {
+                if (inodeTable[i] == null) {
+                    inodeIndex = i;
+                    break;
+                }
+            }
+            if (inodeIndex == -1) throw new Exception("No free inode slots.");
+
+            //  Find free data block
+            short blockIndex = -1;
+            for (short i = 0; i < freeBlockList.length; i++) {
+                if (freeBlockList[i]) {
+                    blockIndex = i;
+                    freeBlockList[i] = false;
+                    break;
+                }
+            }
+            if (blockIndex == -1) throw new Exception("No free blocks available.");
+
+            //  Create entry
+            inodeTable[inodeIndex] = new FEntry(fileName, (short) 0, blockIndex);
+            System.out.println("File created: " + fileName + " at block " + blockIndex);
+
+        } finally {
+            globalLock.unlock();
+        }
+    }
 
     // TODO: Add readFile, writeFile and other required methods,
 }
