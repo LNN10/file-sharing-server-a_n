@@ -20,12 +20,23 @@ public class FileSystemManager {
 
     public FileSystemManager(String filename, int totalSize) {
         // Initialize the file system manager with a file
-        if(instance == null) {
-            //TODO Initialize the file system
-        } else {
-            throw new IllegalStateException("FileSystemManager is already initialized.");
-        }
+        try {
+            // Open or create the virtual disk file
+            this.disk = new RandomAccessFile(filename, "rw");//rw-> read/write
 
+            // Initialize inode table (metadata for each file)
+            this.inodeTable = new FEntry[MAXFILES];
+
+            // Initialize free block list (bitmap)
+            this.freeBlockList = new boolean[MAXBLOCKS];
+            for (int i = 0; i < MAXBLOCKS; i++) {
+                freeBlockList[i] = true; // all blocks free at start
+            }
+
+            System.out.println("File system initialized: " + filename);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize file system", e);
+        }
     }
 
     public void createFile(String fileName) throws Exception {
