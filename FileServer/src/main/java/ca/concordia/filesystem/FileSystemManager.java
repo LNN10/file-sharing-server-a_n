@@ -17,6 +17,7 @@ public class FileSystemManager {
 
     private FEntry[] inodeTable; // Array of inodes
     private boolean[] freeBlockList; // Bitmap for free blocks
+    private FNode[] nodeTable;
 
     public FileSystemManager(String filename, int totalSize) {
         // Initialize the file system manager with a file
@@ -32,6 +33,12 @@ public class FileSystemManager {
             for (int i = 0; i < MAXBLOCKS; i++) {
                 freeBlockList[i] = true; // all blocks free at start
             }
+
+            // Initialize FNode table
+            this.nodeTable = new FNode[MAXBLOCKS];
+            for (int i = 0; i < MAXBLOCKS; i++) {
+            nodeTable[i] = new FNode(-1); // free block metadata
+        }
 
             System.out.println("File system initialized: " + filename);
         } catch (Exception e) {
@@ -80,6 +87,7 @@ public class FileSystemManager {
         }
     }
 
+<<<<<<< HEAD
     public void deleteFile(String fileName) throws Exception {
         globalLock.lock();
         try {
@@ -112,6 +120,10 @@ public class FileSystemManager {
         }
     }
 
+=======
+>>>>>>> b3b66bd (filesystem changes)
 
     // TODO: Add readFile, writeFile and other required methods,
+
+
 }
