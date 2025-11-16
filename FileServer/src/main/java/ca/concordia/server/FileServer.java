@@ -1,4 +1,5 @@
 package ca.concordia.server;
+
 import ca.concordia.filesystem.FileSystemManager;
 
 import java.io.BufferedReader;
@@ -6,104 +7,116 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 
 public class FileServer {
 
-    private FileSystemManager fsManager;
-    private int port;
-    public FileServer(int port, String fileSystemName, int totalSize){
-        // Initialize the FileSystemManager
-        FileSystemManager fsManager = new FileSystemManager(fileSystemName,
-                10*128 );
+    private final FileSystemManager fsManager;
+    private final int port;
+
+    // Constructor matching Main.java expectations
+    public FileServer(int port, String fileSystemName, int totalSize) {
+        // Initialize the FileSystemManager with fixed size (10 blocks × 128 bytes)
+        FileSystemManager fsManager = new FileSystemManager(fileSystemName, 10 * 128);
         this.fsManager = fsManager;
         this.port = port;
     }
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(12345)) {
-            System.out.println("Server started. Listening on port 12345...");
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
+            System.out.println("Server started. Listening on port " + port + "...");
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Handling client: " + clientSocket);
-                //  spawn a thread for each client
-                new Thread(() -> handleClient(clientSocket)).start();
+                System.out.println("Accepted connection from: " + clientSocket);
+
+                Thread clientThread = new Thread(() -> handleClient(clientSocket));
+                clientThread.start();
             }
         } catch (Exception e) {
+            System.err.println("Server error: " + e.getMessage());
             e.printStackTrace();
-            System.err.println("Could not start server on port " + port);
         }
     }
 
     private void handleClient(Socket clientSocket) {
         try (
-                BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true)
+                BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
+                PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true, StandardCharsets.UTF_8)
         ) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println("Received from client: " + line);
-                String[] parts = line.split(" ");
+                line = line.trim();
+                if (line.isEmpty()) {
+                    writer.println("ERROR: Empty command.");
+                    continue;
+                }
+
+                System.out.println("Received: " + line);
+                String[] parts = line.split(" ", 3);
                 String command = parts[0].toUpperCase();
 
-                switch (command) {
-                    case "CREATE":
-                        fsManager.createFile(parts[1]);
-                        writer.println("SUCCESS: File '" + parts[1] + "' created.");
-                        writer.flush();
-                        break;
-                    //TODO: Implement other commands READ, WRITE, DELETE, LIST
+                try {
+                    switch (command) {
+                        case "CREATE":
+                            if (parts.length < 2) {
+                                writer.println("ERROR: Missing filename.");
+                                break;
+                            }
+                            fsManager.createFile(parts[1]);
+                            writer.println("SUCCESS: File '" + parts[1] + "' created.");
+                            break;
 
-                    case "DELETE":
-                        fsManager.deleteFile(parts[1]);
-                        writer.println("SUCCESS: File '" + parts[1] + "' deleted.");
-                        writer.flush();
-                        break;
+                        case "WRITE":
+                            if (parts.length < 3) {
+                                writer.println("ERROR: Missing filename or content.");
+                                break;
+                            }
+                            fsManager.writeFile(parts[1], parts[2].getBytes(StandardCharsets.UTF_8));
+                            writer.println("SUCCESS: File '" + parts[1] + "' written.");
+                            break;
 
-                    case "WRITE":
-                        // WRITE filename data
-                        String fileName = parts[1];
-                        String content = line.substring(command.length() + fileName.length() + 2);
-                        fsManager.writeFile(fileName, content.getBytes());
-                        writer.println("SUCCESS: Wrote to '" + fileName + "'.");
-                        writer.flush();
-                        break;
+                        case "READ":
+                            if (parts.length < 2) {
+                                writer.println("ERROR: Missing filename.");
+                                break;
+                            }
+                            byte[] data = fsManager.readFile(parts[1]);
+                            writer.println("SUCCESS: " + new String(data, StandardCharsets.UTF_8));
+                            break;
 
-                    case "READ":
-                        byte[] bytes = fsManager.readFile(parts[1]);
-                        writer.println("SUCCESS: Read from '" + parts[1] + "'.");
-                        writer.println(new String(bytes));
-                        writer.flush();
-                        break;
+                        case "DELETE":
+                            if (parts.length < 2) {
+                                writer.println("ERROR: Missing filename.");
+                                break;
+                            }
+                            fsManager.deleteFile(parts[1]);
+                            writer.println("SUCCESS: File '" + parts[1] + "' deleted.");
+                            break;
 
-                    case "LIST":
-                        writer.println("SUCCESS: Listing files.");
-                        String[] files = fsManager.listFiles();
-                        for (String f : files) {
-                            writer.println(f);
-                        }
-                        writer.println("END");
-                        writer.flush();
-                        break;
+                        case "LIST":
+                            String[] files = fsManager.listFiles();
+                            writer.println("FILES: " + String.join(",", files));
+                            break;
 
-                    case "QUIT":
-                        writer.println("SUCCESS: Disconnecting.");
-                        return;
-                    default:
-                        writer.println("ERROR: Unknown command.");
-                        break;
+                        case "QUIT":
+                            writer.println("SUCCESS: Disconnecting.");
+                            return;
+
+                        default:
+                            writer.println("ERROR: Unknown command.");
+                    }
+                } catch (Exception e) {
+                    writer.println("ERROR: " + e.getMessage());
                 }
             }
-        }   catch (Exception e) {
-        e.printStackTrace();
-                } finally {
-                        try {
-                        clientSocket.close();
-                } catch (Exception e) {
-        // Ignore
+        } catch (Exception e) {
+            System.err.println("Client error: " + e.getMessage());
+        } finally {
+            try {
+                clientSocket.close();
+                System.out.println("Connection closed: " + clientSocket);
+            } catch (Exception ignored) {}
         }
-        }
-
-        }
-
+    }
 }
